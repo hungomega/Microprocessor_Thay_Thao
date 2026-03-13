@@ -1,0 +1,89 @@
+#include "stm32f10x.h"
+#include "stm32f10x_gpio.h"
+#include "math.h"
+#include "stdio.h"
+
+// NGUYEN HUU HUNG B23DCDT109
+
+uint16_t Led7Seg[] = {0xC0,0xF9,0xA4,0xB0,0x99,0x92,0x82,0xF8,0x80,0x90};
+
+void GPIOA_Configure() // cau hinh cho Port A
+{
+	// B1 : Cap clock cho port A hoat dong 
+	  RCC -> APB2ENR |= 0x00000004;
+	/*cau hinh reset chan minh muon ve 0 truoc : A0 A1 ... A6*/
+	GPIOA -> CRL &= 0xF0000000; 
+	/*Cau hinh cho chan pin va toc do*/
+	GPIOA -> CRL |= 0x03333333;
+}
+
+void GPIOB_Configure() // cau hinh cho Port B
+{
+	// B1 : Cap clock cho port B hoat dong 
+	  RCC -> APB2ENR |= 0x00000008;
+	/*cau hinh reset chan minh muon use ve 0 truoc */
+	GPIOA -> CRL &= 0xFFFFFF00; 
+	/*Cau hinh cho chan pin va toc do*/
+	GPIOA -> CRL |= 0x00000033;
+}
+ 
+void delay_ms(uint16_t time)
+{
+	int i , j ;
+	for(i = 0 ; i < time ; i++)
+	{
+		// 0x2AFF tuong duong 1 ms
+		for(j = 0 ; j < 0x2AFF ; j++);
+	}
+}
+
+int check_nt(int n)
+{
+	for(int i = 2 ; i <= sqrt(n) ; i++) 
+	{
+		if(n % i == 0) 
+		{
+			return 0 ;
+		}
+	}
+	return n > 1 ;
+}
+
+int check_cp(int n) 
+{
+	if(ceil(sqrt(n)) == floor(sqrt(n))) 
+	{
+		return 1 ;
+	}
+	else return 0 ;
+}
+
+int main()
+{
+	void GPIOA_Configure(); 
+	void GPIOB_Configure();
+	GPIOB -> ODR &=~ 0x03; // set ve 0
+	while(1)
+	{
+		for(int i = 0 ; i < 100 ; i++)
+		{
+			for(int j = 0 ; j < 30 ; j++)
+			{
+				if(check_nt(i))
+				{
+					GPIOA -> ODR = Led7Seg[i / 10]; // 98 / 10 = 9 
+					GPIOB -> ODR |= 0x01; // bat led 
+					delay_ms(1);
+					
+					GPIOB -> ODR |=~ 0x01; // tat led
+					GPIOA -> ODR = Led7Seg[i % 10]; // 98 % 10 = 8 
+					GPIOB -> ODR |= 0x02; //bat Led
+					delay_ms(1);
+					GPIOA -> ODR &=~ 0x02; // tat led
+				}
+			}
+		}
+	}
+}
+
+
