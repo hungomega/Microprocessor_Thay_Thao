@@ -34,9 +34,9 @@ int main()
 	{
 		for(int i = 0 ; i < 8 ; i++)
 		{
-			GPIOA -> ODR = mang1[i]; 
+			GPIOA -> ODR = mang1[i]; // led sang
 			delay_ms(30);
-			GPIOA -> ODR &= mang1[i]; 
+			GPIOA -> ODR &= mang1[i]; // van giu nguyen -> thuc te dong nay ko lam led tat
 			delay_ms(30);
 		}
 	}
