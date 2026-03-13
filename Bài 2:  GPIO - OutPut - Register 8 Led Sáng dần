@@ -1,0 +1,45 @@
+#include "stm32f10x.h"
+#include "stm32f10x_gpio.h"
+
+// NGUYEN HUU HUNG B23DCDT109
+
+// Lap nhay led voi PA5
+void GPIOA_Configure() // cau hinh thanh ghi
+{
+	// B1 : Cap clock cho port A hoat dong 
+	  RCC -> APB2ENR |= 0x00000004;
+	/*cau hinh reset chan muon use ve 0 : A1 A2 A3 A4 */
+	GPIOA -> CRL &= 0x00000000; // luu ý thanh ghi CRL chi quan ly các chân bin tu 0 -> 7 thôi 
+	/*Cau hinh cho chan pin va toc do*/
+	GPIOA -> CRL |= 0x33333333;
+}
+
+
+void delay_ms(uint16_t time)
+{
+	int i , j ;
+	for(i = 0 ; i < time ; i++)
+	{
+		// 0x2AFF tuong duong 1 ms
+		for(j = 0 ; j < 0x2AFF ; j++);
+	}
+}
+
+uint32_t mang1[] = {0xFFFE , 0xFFFC , 0xFFF8 , 0xFFF0 , 0xFFE0 , 0xFFC0 , 0xFF80 , 0xFF00};
+
+int main()
+{
+	void GPIOA_Configure(); // cau hinh thanh ghi
+	while(1)
+	{
+		for(int i = 0 ; i < 9 ; i++)
+		{
+			GPIOA -> ODR = mang1[i]; 
+			delay_ms(30);
+			GPIOA -> ODR &= mang1[i]; 
+			delay_ms(30);
+		}
+	}
+}
+
+
