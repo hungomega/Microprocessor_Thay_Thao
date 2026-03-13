@@ -58,6 +58,23 @@ int check_cp(int n)
 	else return 0 ;
 }
 
+int check_hh(int n)
+{
+	int sum = 0 ;
+	for(int i = 1 ; i <= sqrt(n) ; i++) 
+	{
+		if(n % i == 0) 
+		{
+			sum += i ; // i la uoc cua n
+			if(sqrt(n) != i) 
+			{
+				sum += n / i;
+			}
+		}
+	}
+	return sum - n == n;
+}
+
 int main()
 {
 	void GPIOA_Configure(); 
@@ -85,5 +102,3 @@ int main()
 		}
 	}
 }
-
-
