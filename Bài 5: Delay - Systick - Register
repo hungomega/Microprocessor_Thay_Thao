@@ -1,0 +1,43 @@
+#include "stm32f10x.h"
+#include "stm32f10x_gpio.h"
+#include "math.h"
+#include "stdio.h"
+
+// NGUYEN HUU HUNG B23DCDT109
+
+void GPIOA_Configure() // cau hinh cho Port A
+{
+	// B1 : Cap clock cho port A hoat dong 
+	  RCC -> APB2ENR |= 0x00000004;
+	/*cau hinh reset chan minh muon ve 0 truoc : A0 A1 ... A6*/
+	GPIOA -> CRL &= 0xFF0FFFFF; // luu ý thanh ghi CRL chi quan ly các chân bin tu 0 -> 7 thôi
+	/*Cau hinh cho chan pin va toc do*/
+	GPIOA -> CRL |= 0x00300000;
+}
+
+void delay_ms(int time)
+{
+	while(time)
+	{
+		SysTick -> LOAD = 72000 - 1;
+		SysTick -> VAL = 0;
+		SysTick -> CTRL = 5; // Cho n Clock AHB . Enable Systick
+		while(!(SysTick -> CTRL & (1 << 16)))
+		{
+		}
+		--time;
+	}
+		
+}
+
+int main()
+{
+	GPIOA_Configure(); 
+	while(1)
+	{
+		GPIOA -> ODR |= 0x0020;
+		delay_ms(100);
+		GPIOA -> ODR &=~ (0x0020);
+		delay_ms(100);
+	}
+}
