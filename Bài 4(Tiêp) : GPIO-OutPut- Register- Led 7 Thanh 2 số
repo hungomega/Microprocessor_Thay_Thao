@@ -77,8 +77,8 @@ int check_hh(int n)
 
 int main()
 {
-	void GPIOA_Configure(); 
-	void GPIOB_Configure();
+	GPIOA_Configure(); 
+	GPIOB_Configure();
 	GPIOB -> ODR &=~ 0x03; // set ve 0
 	while(1)
 	{
