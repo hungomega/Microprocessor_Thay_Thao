@@ -22,9 +22,9 @@ void GPIOB_Configure() // cau hinh cho Port B
 	// B1 : Cap clock cho port B hoat dong 
 	  RCC -> APB2ENR |= 0x00000008;
 	/*cau hinh reset chan minh muon use ve 0 truoc */
-	GPIOA -> CRL &= 0xFFFFFF00; 
+	GPIOB -> CRL &= 0xFFFFFF00; 
 	/*Cau hinh cho chan pin va toc do*/
-	GPIOA -> CRL |= 0x00000033;
+	GPIOB -> CRL |= 0x00000033;
 }
  
 void delay_ms(uint16_t time)
