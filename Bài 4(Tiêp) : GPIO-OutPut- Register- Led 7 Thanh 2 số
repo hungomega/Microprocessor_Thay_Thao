@@ -96,7 +96,7 @@ int main()
 					GPIOA -> ODR = Led7Seg[i % 10]; // 98 % 10 = 8 
 					GPIOB -> ODR |= 0x02; //bat Led
 					delay_ms(1);
-					GPIOA -> ODR &=~ 0x02; // tat led
+					GPIOB -> ODR &=~ 0x02; // tat led
 				}
 			}
 		}
