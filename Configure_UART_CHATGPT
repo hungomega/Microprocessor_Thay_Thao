@@ -1,0 +1,40 @@
+#include "stm32f10x.h"
+
+void UART_Init()
+{
+    // B1: c?p clock
+    RCC->APB2ENR |= (1<<2);   // GPIOA
+    RCC->APB2ENR |= (1<<14);  // USART1
+
+    // B2: c?u hình PA9 (TX)
+    GPIOA->CRH &= ~(0xF << 4); // PA9 bi reset 
+    GPIOA->CRH |=  (0xB << 4);
+
+    // B3: baudrate 9600 (8MHz)
+    USART1->BRR = 0x341;
+
+    // B4: enable USART + TX
+    USART1->CR1 |= (1<<13); // UE
+    USART1->CR1 |= (1<<3);  // TE 
+}
+
+void UART_SendChar(char c)
+{
+	while(!(USART1->SR & (1<<7))) // TXe cho ranh
+	{
+		// cho TXE = 1 ;  
+	}
+		USART1->DR = c; // gui ky tu
+}
+
+int main()
+{
+    UART_Init();
+
+    while(1)
+    {
+        UART_SendChar('A');
+
+        for(int i = 0; i < 1000000; i++); // delay
+    }
+}
