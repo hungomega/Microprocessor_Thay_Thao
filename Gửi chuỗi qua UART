@@ -1,0 +1,53 @@
+#include "stm32f10x.h"
+
+// ================= UART INIT =================
+void UART_Init()
+{
+    // B1: c?p clock GPIOA + USART1
+    RCC->APB2ENR |= (1<<2);   // GPIOA
+    RCC->APB2ENR |= (1<<14);  // USART1
+
+    // B2: c?u hình PA9 (TX) = AF Push-Pull, 50MHz
+    GPIOA->CRH &= ~(0xF << 4);
+    GPIOA->CRH |=  (0xB << 4);
+
+    // B3: Baudrate 9600 v?i 8MHz
+    USART1->BRR = 0x341;
+
+    // B4: Enable USART + TX
+    USART1->CR1 |= (1<<13); // UE
+    USART1->CR1 |= (1<<3);  // TE
+}
+
+// ================= SEND 1 CHAR =================
+void UART_SendChar(char c)
+{
+    while(!(USART1->SR & (1<<7)))
+		{
+			// ch? TXE = 1
+		}
+    USART1->DR = c;
+}
+
+// ================= SEND STRING =================
+void UART_SendString(char *str)
+{
+    while(*str) // chay den khi gap '\0'
+    {
+        UART_SendChar(*str);
+        str++; // sang ký t? ti?p theo
+    }
+}
+
+// ================= MAIN =================
+int main()
+{
+    UART_Init();
+
+    while(1)
+    {
+        UART_SendString("HELLO\r\n"); // g?i HELLO
+        for(int i = 0; i < 1000000; i++); // delay
+    }
+}
+
