@@ -1,0 +1,53 @@
+#include "stm32f10x.h"
+GPIO_InitTypeDef GPIO_InitStruct;
+ADC_InitTypeDef ADC_InitStruct;
+TIM_TimeBaseInitTypeDef TIM_InitStruct;
+void Ip_GPIO_Init()
+{ 
+	/*B1: Cap clock cho Port A*/
+	RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA, ENABLE);
+	/*B2: Cau hinh LED Output, Speed: 50MHz, Push-Pull*/
+	GPIO_InitStruct.GPIO_Mode  = GPIO_Mode_AIN;
+	GPIO_InitStruct.GPIO_Pin   = GPIO_Pin_1 ;
+	GPIO_InitStruct.GPIO_Speed = GPIO_Speed_50MHz;
+	GPIO_Init(GPIOA, &GPIO_InitStruct);
+}
+void Ip_ADC_Init()
+{
+	/*B1: Cap clock cho ADC1 */
+	RCC_APB2PeriphClockCmd(RCC_APB2Periph_ADC1, ENABLE);
+	/*B2: Cau hinh cho ADC1*/
+	ADC_InitStruct.ADC_Mode = ADC_Mode_Independent;
+	ADC_InitStruct.ADC_ScanConvMode = DISABLE;
+	ADC_InitStruct.ADC_ContinuousConvMode = ENABLE;
+	ADC_InitStruct.ADC_ExternalTrigConv = ADC_ExternalTrigConv_T3_TRGO;
+	ADC_InitStruct.ADC_DataAlign = ADC_DataAlign_Right;
+	ADC_InitStruct.ADC_NbrOfChannel = 1;
+	ADC_Init( ADC1, &ADC_InitStruct);
+}
+void Ip_TIMER_BaseInit()
+{
+	RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM3,ENABLE);
+	
+	TIM_InitStruct.TIM_Prescaler = 72-1;
+	TIM_InitStruct.TIM_Period = 62 - 1;
+	TIM_InitStruct.TIM_CounterMode = TIM_CounterMode_Up;
+	TIM_InitStruct.TIM_ClockDivision = TIM_CKD_DIV1;
+	TIM_InitStruct.TIM_RepetitionCounter = 0;
+	
+	TIM_TimeBaseInit(TIM3, &TIM_InitStruct);
+}
+int main()
+{
+	
+	Ip_GPIO_Init();
+	
+	Ip_ADC_Init();
+	
+	Ip_TIMER_BaseInit();
+	
+	while(1)
+	{
+		ADC_Cmd(ADC1, ENABLE);
+	}
+}
