@@ -1,0 +1,53 @@
+#include "stm32f10x_dma.h"
+#include "stm32f10x_rcc.h"
+#include "stm32f10x_adc.h"
+
+#define BUFFER_SIZE 2048
+uint16_t Sound_Buffer[BUFFER_SIZE]; // Mang luu mau âm thanh de chay FFT
+
+void DMA_Sound_Config(void) {
+    DMA_InitTypeDef DMA_InitStruct;
+
+    /* --- BUOC 1: DÙNG THU VIEN RCC --- */
+    // DMA1 nam trên bus AHB, phai bat clock ? dây thì các thanh ghi DMA moi hoat dong
+    RCC_AHBPeriphClockCmd(RCC_AHBPeriph_DMA1, ENABLE);
+
+    /* --- BUOC 2: DÙNG THU VIEN DMA --- */
+    // Ðua Channel 1 ve trang thái mac dinh (Reset)
+    DMA_DeInit(DMA1_Channel1); 
+
+    // Ðia chi nguon: Thanh ghi du lieu cua ADC1
+    DMA_InitStruct.DMA_PeripheralBaseAddr = (uint32_t)&(ADC1->DR);
+    // Ðia chi dích: Ðia chi cua mang Sound_Buffer trong RAM
+    DMA_InitStruct.DMA_MemoryBaseAddr = (uint32_t)Sound_Buffer;
+    
+    // Huong chuyen: Tu ngoai vi (Peripheral) sang bo nho (Memory)
+    DMA_InitStruct.DMA_DIR = DMA_DIR_PeripheralSRC;
+    
+    // So luong mau can lay (Buffer Size)
+    DMA_InitStruct.DMA_BufferSize = BUFFER_SIZE;
+    
+    // Không tang dia chi ngoai vi (vì chi doc tu 1 thanh ghi ADC duy nhat)
+    DMA_InitStruct.DMA_PeripheralInc = DMA_PeripheralInc_Disable;
+    // Tang dia chi bo nho (de luu mau 1 vào index 0, mau 2 vào index 1...)
+    DMA_InitStruct.DMA_MemoryInc = DMA_MemoryInc_Enable;
+    
+    // Kích thuoc du lieu: 16-bit (HalfWord) vì ADC STM32 là 12-bit
+    DMA_InitStruct.DMA_PeripheralDataSize = DMA_PeripheralDataSize_HalfWord;
+    DMA_InitStruct.DMA_MemoryDataSize = DMA_MemoryDataSize_HalfWord;
+    
+    // Che do Circular: Tu dong quay lai dau mang khi day (Rat quan trong cho xu lý âm thanh liên tuc)
+    DMA_InitStruct.DMA_Mode = DMA_Mode_Circular;
+    
+    // Ðo uu tiên: Cao (High) de dam bao không mat mau âm thanh
+    DMA_InitStruct.DMA_Priority = DMA_Priority_High;
+    
+    // Tat che do Memory-to-Memory (vì ta dang dùng Peripheral-to-Memory)
+    DMA_InitStruct.DMA_M2M = DMA_M2M_Disable;
+
+    // Ghi cau hình vào phan cung
+    DMA_Init(DMA1_Channel1, &DMA_InitStruct);
+
+    // Kích hoat DMA Channel 1
+    DMA_Cmd(DMA1_Channel1, ENABLE);
+}
