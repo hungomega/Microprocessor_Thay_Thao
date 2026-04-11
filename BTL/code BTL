@@ -1,0 +1,186 @@
+#include "stm32f10x.h"
+#include "stm32f10x_dma.h"
+#include "stm32f10x_rcc.h"
+#include "stm32f10x_adc.h"
+#include "stdio.h"
+
+#define BUFFER_SIZE 2048
+
+GPIO_InitTypeDef GPIO_InitStruct;
+ADC_InitTypeDef ADC_InitStruct;
+TIM_TimeBaseInitTypeDef TIM_InitStruct;
+void Ip_GPIO_Init()
+{ 
+	/*B1: Cap clock cho Port A*/
+	RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA, ENABLE);
+	/*B2: Cau hinh LED Output, Speed: 50MHz, Push-Pull*/
+	GPIO_InitStruct.GPIO_Mode  = GPIO_Mode_AIN;
+	GPIO_InitStruct.GPIO_Pin   = GPIO_Pin_1 ;
+	GPIO_InitStruct.GPIO_Speed = GPIO_Speed_50MHz;
+	GPIO_Init(GPIOA, &GPIO_InitStruct);
+}
+void Ip_ADC_Init()
+{
+	/*B1: Cap clock cho ADC1 */
+	RCC_APB2PeriphClockCmd(RCC_APB2Periph_ADC1, ENABLE);
+	/*B2: Cau hinh cho ADC1*/
+	ADC_InitStruct.ADC_Mode = ADC_Mode_Independent;
+	ADC_InitStruct.ADC_ScanConvMode = DISABLE;
+	ADC_InitStruct.ADC_ContinuousConvMode = DISABLE;
+	ADC_InitStruct.ADC_ExternalTrigConv = ADC_ExternalTrigConv_T3_TRGO;
+	ADC_InitStruct.ADC_DataAlign = ADC_DataAlign_Right;
+	ADC_InitStruct.ADC_NbrOfChannel = 1;
+	ADC_Init( ADC1, &ADC_InitStruct);
+}
+void Ip_TIMER_BaseInit()
+{
+	RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM3,ENABLE);
+	
+	TIM_InitStruct.TIM_Prescaler = 72-1;
+	TIM_InitStruct.TIM_Period = 62 - 1;
+	TIM_InitStruct.TIM_CounterMode = TIM_CounterMode_Up;
+	TIM_InitStruct.TIM_ClockDivision = TIM_CKD_DIV1;
+	TIM_InitStruct.TIM_RepetitionCounter = 0;
+	
+	TIM_TimeBaseInit(TIM3, &TIM_InitStruct);
+}
+
+uint16_t Sound_Buffer[BUFFER_SIZE]; // Mang luu mau âm thanh de chay FFT
+
+void DMA_Sound_Config(void) {
+    DMA_InitTypeDef DMA_InitStruct;
+
+    /* --- BUOC 1: DÙNG THU VIEN RCC --- */
+    // DMA1 nam trên bus AHB, phai bat clock ? dây thì các thanh ghi DMA moi hoat dong
+    RCC_AHBPeriphClockCmd(RCC_AHBPeriph_DMA1, ENABLE);
+
+    /* --- BUOC 2: DÙNG THU VIEN DMA --- */
+    // Ðua Channel 1 ve trang thái mac dinh (Reset)
+    DMA_DeInit(DMA1_Channel1); 
+
+    // Ðia chi nguon: Thanh ghi du lieu cua ADC1
+    DMA_InitStruct.DMA_PeripheralBaseAddr = (uint32_t)&(ADC1->DR);
+    // Ðia chi dích: Ðia chi cua mang Sound_Buffer trong RAM
+    DMA_InitStruct.DMA_MemoryBaseAddr = (uint32_t)Sound_Buffer;
+    
+    // Huong chuyen: Tu ngoai vi (Peripheral) sang bo nho (Memory)
+    DMA_InitStruct.DMA_DIR = DMA_DIR_PeripheralSRC;
+    
+    // So luong mau can lay (Buffer Size)
+    DMA_InitStruct.DMA_BufferSize = BUFFER_SIZE;
+    
+    // Không tang dia chi ngoai vi (vì chi doc tu 1 thanh ghi ADC duy nhat)
+    DMA_InitStruct.DMA_PeripheralInc = DMA_PeripheralInc_Disable;
+    // Tang dia chi bo nho (de luu mau 1 vào index 0, mau 2 vào index 1...)
+    DMA_InitStruct.DMA_MemoryInc = DMA_MemoryInc_Enable;
+    
+    // Kích thuoc du lieu: 16-bit (HalfWord) vì ADC STM32 là 12-bit
+    DMA_InitStruct.DMA_PeripheralDataSize = DMA_PeripheralDataSize_HalfWord;
+    DMA_InitStruct.DMA_MemoryDataSize = DMA_MemoryDataSize_HalfWord;
+    
+    // Che do Circular: Tu dong quay lai dau mang khi day (Rat quan trong cho xu lý âm thanh liên tuc)
+    DMA_InitStruct.DMA_Mode = DMA_Mode_Circular;
+    
+    // Ðo uu tiên: Cao (High) de dam bao không mat mau âm thanh
+    DMA_InitStruct.DMA_Priority = DMA_Priority_High;
+    
+    // Tat che do Memory-to-Memory (vì ta dang dùng Peripheral-to-Memory)
+    DMA_InitStruct.DMA_M2M = DMA_M2M_Disable;
+
+    // Ghi cau hình vào phan cung
+    DMA_Init(DMA1_Channel1, &DMA_InitStruct);
+
+    // Kích hoat DMA Channel 1
+    DMA_Cmd(DMA1_Channel1, ENABLE);	
+}
+
+void UART1_Init(void)
+{
+  //  RCC->APB2ENR |= (1 << 2);   // GPIOA clock
+    RCC->APB2ENR |= (1 << 14);  // USART1 clock
+
+    // PA9 (TX) - AF Push Pull
+    GPIOA->CRH &= ~(0xF << 4);
+    GPIOA->CRH |=  (0xB << 4);
+
+    // PA10 (RX) - Floating input
+    GPIOA->CRH &= ~(0xF << 8);
+    GPIOA->CRH |=  (0x4 << 8);
+
+    USART1->BRR = 0x1D4C; // 9600 baud (72MHz)
+    USART1->CR1 |= (1 << 13) | (1 << 3); // UE, TE
+}
+
+// ===== UART SEND =====
+void UART1_SendChar(char c)
+{
+    while (!(USART1->SR & (1 << 7))); // TXE
+    USART1->DR = c;
+}
+
+void UART1_SendNumber(uint16_t num)
+{
+    char buffer[10];
+		int i;
+	
+    sprintf(buffer, "%d\r\n", num);
+		
+		
+    for ( i = 0; buffer[i] != '\0'; i++)
+    {
+        UART1_SendChar(buffer[i]);
+    }
+}
+
+
+int main()
+{
+	
+	Ip_GPIO_Init();
+	
+	Ip_ADC_Init();
+	
+	DMA_Sound_Config();
+	
+	Ip_TIMER_BaseInit();
+	
+	ADC_RegularChannelConfig(ADC1, ADC_Channel_1, 1, ADC_SampleTime_55Cycles5);
+
+	ADC_ExternalTrigConvCmd(ADC1, ENABLE);
+	 
+	ADC_Cmd(ADC1, ENABLE);
+
+	ADC_ResetCalibration(ADC1);
+	while(ADC_GetResetCalibrationStatus(ADC1));
+
+	ADC_StartCalibration(ADC1);
+	while(ADC_GetCalibrationStatus(ADC1));
+	
+	TIM_SelectOutputTrigger(TIM3, TIM_TRGOSource_Update);
+	
+	TIM_Cmd(TIM3, ENABLE);
+	
+	
+	ADC_DMACmd(ADC1, ENABLE);
+	
+	UART1_Init();
+	
+	while(1)
+	{
+    // Ki?m tra xem DMA dã ghi d?y Buffer chua (Flag TC - Transfer Complete)
+    if(DMA_GetFlagStatus(DMA1_FLAG_TC1)) 
+    {
+				int i;
+			
+        // Xóa c? d? d?i l?n sau
+        DMA_ClearFlag(DMA1_FLAG_TC1);
+        
+        // G?i th? 10 m?u d?u tiên lên UART d? ki?m tra
+				
+        for( i=0; i<10; i++) {
+            UART1_SendNumber(Sound_Buffer[i]);
+        }
+        UART1_SendChar('\n');
+    }
+	}
+}
