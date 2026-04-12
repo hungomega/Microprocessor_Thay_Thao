@@ -1,0 +1,66 @@
+Bài 2: Trong thuật toán cổ đại có thuật toán Caesar Cipher. Viết chương trình ASM cho ARM để tìm khóa K bằng phương pháp vét cạn.
+Trong thuật toán này sử dụng bảng chữ cái A, B, C, ..., Z.
+Đầu vào là chuỗi mã hóa "M PSZI CSCY" bắt đầu tại địa chỉ 0xFFF0FFF0.
+Xây dựng chương trình ASM thử tất cả các khóa K từ 1 đến 25 và sinh ra các chuỗi giải mã tương ứng.
+.text
+    .global _start
+
+_start:
+    ; =========================================================
+    ; KHỞI TẠO ĐỊA CHỈ VÀ THANH GHI
+    ; =========================================================
+    LDR R0, =0xFFF0FFF0     ; R0 = Địa chỉ bắt đầu của chuỗi mã hóa
+    LDR R1, =0x20000000     ; R1 = Địa chỉ RAM để lưu các chuỗi giải mã sinh ra
+    
+    MOV R2, #1              ; R2 = Khóa K. Khởi tạo K = 1 (Thử từ 1 đến 25)
+
+loop_k:
+    ; =========================================================
+    ; VÒNG LẶP KHÓA K (Chạy từ 1 đến 25)
+    ; =========================================================
+    CMP R2, #26             ; Kiểm tra nếu K == 26 thì đã thử xong hết
+    BEQ end_prog            ; Thoát chương trình
+
+    MOV R3, R0              ; R3 = Con trỏ đọc (Trỏ lại về đầu chuỗi gốc)
+    MOV R4, R1              ; R4 = Con trỏ ghi (Vị trí trống hiện tại trên RAM)
+
+loop_char:
+    ; =========================================================
+    ; VÒNG LẶP KÝ TỰ (Xử lý từng ký tự trong chuỗi)
+    ; =========================================================
+    LDRB R5, [R3], #1       ; Đọc 1 byte vào R5, sau đó tăng R3 lên 1
+    CMP R5, #0              ; Kiểm tra nếu gặp ký tự NULL (0x00) -> Hết chuỗi
+    BEQ end_str
+
+    CMP R5, #32             ; Kiểm tra nếu là dấu cách (ASCII = 32)
+    BEQ store_char          ; Nếu là dấu cách thì không giải mã, lưu luôn
+
+    ; Bắt đầu giải mã: Ký tự mới = Ký tự cũ - K
+    SUB R5, R5, R2          
+
+    ; Xử lý quay vòng (Wrap-around) nếu ký tự bị lùi quá chữ 'A'
+    CMP R5, #65             ; So sánh với chữ 'A' (mã 65)
+    ADDLT R5, R5, #26       ; Nếu nhỏ hơn 'A', cộng 26 để quay lại từ 'Z'
+
+store_char:
+    STRB R5, [R4], #1       ; Lưu ký tự vào RAM, tăng con trỏ ghi R4
+    B loop_char             ; Tiếp tục với ký tự tiếp theo
+
+end_str:
+    ; =========================================================
+    ; KẾT THÚC MỘT CHUỖI GIẢI MÃ
+    ; =========================================================
+    MOV R5, #10             ; Thêm ký tự xuống dòng (Line Feed) để dễ quan sát
+    STRB R5, [R4], #1
+    MOV R5, #0              ; Thêm NULL để kết thúc chuỗi
+    STRB R5, [R4], #1       
+
+    MOV R1, R4              ; Cập nhật R1 để chuỗi sau không ghi đè chuỗi trước
+    ADD R2, R2, #1          ; Tăng khóa K (K++)
+    B loop_k                ; Quay lại thử khóa tiếp theo
+
+end_prog:
+    ; =========================================================
+    ; DỪNG CHƯƠNG TRÌNH
+    ; =========================================================
+    B end_prog              ; Vòng lặp vô hạn
