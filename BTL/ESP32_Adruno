@@ -1,0 +1,115 @@
+#include <WiFi.h>          // Thư viện kết nối WiFi
+#include <WebServer.h>     // Thư viện tạo Web Server
+#include <math.h>          // Thư viện toán học
+
+// --- Cấu hình thông tin mạng WiFi ---
+const char* ssid = "Galaxy A30sC57D";      // Thay bằng tên WiFi của bạn
+const char* password = "14012005";     // Thay bằng mật khẩu WiFi
+
+WebServer server(80); // Khởi tạo server cổng 80
+
+// --- Cấu hình bộ đệm dữ liệu (Buffer) ---
+#define SAMPLE_COUNT 100   // Gom 100 mẫu để tính toán một lần
+int samples[SAMPLE_COUNT]; // Mảng lưu trữ mẫu ADC
+int sampleIdx = 0;         // Biến đếm vị trí mảng
+
+// --- Các biến lưu trữ kết quả ---
+float BD_TrungBinh = 0;    // Biên độ trung bình
+float dB = 0;              // Mức cường độ âm thanh
+int Gia_Tri_ADC = 0;       // Giá trị ADC tức thời
+
+// --- Hàm thuật toán xử lý dữ liệu âm thanh ---
+void calculateSound() {
+  long BienDo = 0;         
+  long Tong_BP = 0;          
+
+  for (int i = 0; i < SAMPLE_COUNT; i++) {
+    // ADC STM32 là 12-bit, điểm giữa là 2048
+    int16_t deviation = samples[i] - 2048; 
+    
+    BienDo += abs(deviation);             
+    Tong_BP += (long)deviation * deviation; 
+  }
+
+  // 1. Tính Biên độ trung bình
+  BD_TrungBinh = (float)BienDo / SAMPLE_COUNT;
+
+  // 2. Tính Độ ồn dB dựa trên công thức RMS
+  float rms = sqrt((float)Tong_BP / SAMPLE_COUNT); 
+  if (rms > 0) {
+    dB = 20 * log10(rms); 
+  } else {
+    dB = 0;               
+  }
+}
+
+// --- Hàm giao diện Web ---
+void handleRoot() {
+  String html = "<html><head><meta charset='UTF-8'>";
+  html += "<style>";
+  html += "body{font-family:sans-serif; text-align:center; padding-top:30px; background:#f0f0f0;}";
+  html += ".box{background:white; display:inline-block; padding:30px; border-radius:15px; box-shadow:0 5px 15px rgba(0,0,0,0.1);}";
+  html += ".db{font-size:60px; color:#e74c3c; font-weight:bold;}";
+  html += ".amp{font-size:30px; color:#3498db;}";
+  html += "</style></head><body>";
+  
+  html += "<div class='box'>";
+  html += "<h1>Giám Sát Âm Thanh PTIT</h1>";
+  html += "<p>Độ ồn hiện tại:</p>";
+  html += "<div class='db'>" + String(dB, 1) + " dB</div>"; 
+  html += "<p>Biên độ trung bình:</p>";
+  html += "<div class='amp'>" + String(BD_TrungBinh, 2) + "</div>";    
+  html += "<hr><p>Giá trị ADC thô: " + String(Gia_Tri_ADC) + "</p>";     
+  html += "</div>";
+  
+  // Tự động load lại trang sau mỗi 800ms
+  html += "<script>setInterval(function(){location.reload();}, 800);</script>";
+  html += "</body></html>";
+  
+  server.send(200, "text/html", html); 
+}
+
+void setup() {
+  Serial.begin(115200);   
+  Serial2.begin(115200);    // Nhận từ STM32 (Chân 16)
+
+  // Kết nối WiFi
+  WiFi.begin(ssid, password); 
+  while (WiFi.status() != WL_CONNECTED) { 
+    delay(500); 
+    Serial.print(".");    
+  }
+  
+  // In IP ra Serial Monitor
+  Serial.println("\nWiFi Connected!");
+  Serial.print("Địa chỉ IP để mở Web: ");
+  Serial.println(WiFi.localIP()); 
+
+  server.on("/", handleRoot); 
+  server.begin();             
+}
+
+void loop() {
+  server.handleClient(); // Duy trì web server
+
+  // Đọc dữ liệu từ STM32 gửi qua UART
+  if (Serial2.available()) {
+    String input = Serial2.readStringUntil('\n');
+    input.trim(); 
+    Serial.println(input);
+    if (input.length() > 0) {
+      Gia_Tri_ADC = input.toInt(); 
+      samples[sampleIdx++] = Gia_Tri_ADC; 
+
+      // Đủ 100 mẫu thì tính toán
+      if (sampleIdx >= SAMPLE_COUNT) {
+        calculateSound(); 
+        sampleIdx = 0;    
+        
+        // Debug ra màn hình máy tính
+        Serial.print("Amp: "); Serial.print(BD_TrungBinh);
+        Serial.print(" | dB: "); Serial.println(dB);
+      }
+    }
+  }
+}
