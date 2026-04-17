@@ -1,115 +1,166 @@
-#include <WiFi.h>          // Thư viện kết nối WiFi
-#include <WebServer.h>     // Thư viện tạo Web Server
-#include <math.h>          // Thư viện toán học
+#include <WiFi.h>
+#include <WebServer.h>
+#include <math.h>
 
-// --- Cấu hình thông tin mạng WiFi ---
-const char* ssid = "Galaxy A30sC57D";      // Thay bằng tên WiFi của bạn
-const char* password = "14012005";     // Thay bằng mật khẩu WiFi
+// ===== WIFI =====
+const char* ssid = "ChungVip 2.4G";
+const char* password = "123456789";
 
-WebServer server(80); // Khởi tạo server cổng 80
+WebServer server(80);
 
-// --- Cấu hình bộ đệm dữ liệu (Buffer) ---
-#define SAMPLE_COUNT 100   // Gom 100 mẫu để tính toán một lần
-int samples[SAMPLE_COUNT]; // Mảng lưu trữ mẫu ADC
-int sampleIdx = 0;         // Biến đếm vị trí mảng
+// ===== BUFFER =====
+#define SAMPLE_COUNT 20
+int samples[SAMPLE_COUNT];
+int sampleIdx = 0;
 
-// --- Các biến lưu trữ kết quả ---
-float BD_TrungBinh = 0;    // Biên độ trung bình
-float dB = 0;              // Mức cường độ âm thanh
-int Gia_Tri_ADC = 0;       // Giá trị ADC tức thời
+// ===== RESULT =====
+float BD_TrungBinh = 0;
+float dB = 0;
+int Gia_Tri_ADC = 0;
 
-// --- Hàm thuật toán xử lý dữ liệu âm thanh ---
+// ===== TÍNH TOÁN =====
 void calculateSound() {
-  long BienDo = 0;         
-  long Tong_BP = 0;          
+  if (SAMPLE_COUNT == 0) return;
 
+  long long Tong_BP = 0;
+  double tong_tri_tuyet_doi = 0;
+  
+  // 1. Tính trung bình thực tế của mẻ mẫu này để khử nhiễu DC (DC Offset removal)
+  long sum_adc = 0;
   for (int i = 0; i < SAMPLE_COUNT; i++) {
-    // ADC STM32 là 12-bit, điểm giữa là 2048
-    int16_t deviation = samples[i] - 2048; 
+    sum_adc += samples[i];
+  }
+  float thuc_te_zero = (float)sum_adc / SAMPLE_COUNT;
+
+  // 2. Tính toán Biên độ và RMS
+  for (int i = 0; i < SAMPLE_COUNT; i++) {
+    float deviation = (float)samples[i] - thuc_te_zero; // Lấy mẫu trừ đi điểm Zero thực tế
     
-    BienDo += abs(deviation);             
-    Tong_BP += (long)deviation * deviation; 
+    tong_tri_tuyet_doi += abs(deviation);
+    Tong_BP += (long)(deviation * deviation);
   }
 
-  // 1. Tính Biên độ trung bình
-  BD_TrungBinh = (float)BienDo / SAMPLE_COUNT;
+  // Cập nhật Biên độ trung bình (Amplitude)
+  BD_TrungBinh = (float)tong_tri_tuyet_doi / SAMPLE_COUNT;
 
-  // 2. Tính Độ ồn dB dựa trên công thức RMS
-  float rms = sqrt((float)Tong_BP / SAMPLE_COUNT); 
-  if (rms > 0) {
-    dB = 20 * log10(rms); 
+  // 3. Tính dB (RMS)
+  float rms = sqrt((float)Tong_BP / SAMPLE_COUNT);
+  
+  if (rms > 0.5) { // Ngưỡng chống nhiễu nhẹ
+    // Công thức dB: 20*log10(rms). 
+    // Cộng thêm một số (ví dụ +30) để khớp với thực tế nếu cần (Calibration)
+    dB = 20 * log10(rms) + 20; 
   } else {
-    dB = 0;               
+    dB = 0;
   }
+  
+  // Cập nhật giá trị ADC cuối cùng để hiển thị web
+  Gia_Tri_ADC = samples[SAMPLE_COUNT - 1]; 
 }
 
-// --- Hàm giao diện Web ---
+// ===== WEB =====
+// Hàm gửi "Cái khung" Web - Chỉ tải 1 lần duy nhất
 void handleRoot() {
-  String html = "<html><head><meta charset='UTF-8'>";
+  String html = "<html><head><meta charset='UTF-8' name='viewport' content='width=device-width, initial-scale=1'>";
   html += "<style>";
-  html += "body{font-family:sans-serif; text-align:center; padding-top:30px; background:#f0f0f0;}";
-  html += ".box{background:white; display:inline-block; padding:30px; border-radius:15px; box-shadow:0 5px 15px rgba(0,0,0,0.1);}";
-  html += ".db{font-size:60px; color:#e74c3c; font-weight:bold;}";
+  html += "body{font-family:sans-serif; text-align:center; background:#f8f9fa; color:#333;}";
+  html += ".box{background:white; display:inline-block; padding:30px; border-radius:20px; margin-top:50px; box-shadow:0 10px 25px rgba(0,0,0,0.1); min-width:300px;}";
+  html += ".db{font-size:70px; color:#e74c3c; font-weight:bold; margin:10px 0;}";
   html += ".amp{font-size:30px; color:#3498db;}";
+  html += "hr{border:0; border-top:1px solid #eee; margin:20px 0;}";
   html += "</style></head><body>";
-  
+
   html += "<div class='box'>";
-  html += "<h1>Giám Sát Âm Thanh PTIT</h1>";
-  html += "<p>Độ ồn hiện tại:</p>";
-  html += "<div class='db'>" + String(dB, 1) + " dB</div>"; 
-  html += "<p>Biên độ trung bình:</p>";
-  html += "<div class='amp'>" + String(BD_TrungBinh, 2) + "</div>";    
-  html += "<hr><p>Giá trị ADC thô: " + String(Gia_Tri_ADC) + "</p>";     
+  html += "<h2>GIÁM SÁT ÂM THANH</h2>";
+  html += "<div id='db_val' class='db'>--</div>";
+  html += "<p>Biên độ (Amp): <b id='amp_val' class='amp'>--</b></p>";
+ // html += "<hr><p style='color:#888'>Giá trị ADC: <span id='adc_val'>0</span></p>";
   html += "</div>";
-  
-  // Tự động load lại trang sau mỗi 800ms
-  html += "<script>setInterval(function(){location.reload();}, 800);</script>";
-  html += "</body></html>";
-  
-  server.send(200, "text/html", html); 
+
+  html += "<script>";
+  html += "function updateData() {";
+  html += "  fetch('/data')";
+  html += "    .then(res => res.json())";
+  html += "    .then(data => {"; // Nếu nhận được JSON chuẩn thì mới cập nhật
+  html += "      document.getElementById('db_val').innerText = data.dB.toFixed(1) + ' dB';";
+  html += "      document.getElementById('amp_val').innerText = data.amp.toFixed(2);";
+ // html += "      document.getElementById('adc_val').innerText = data.adc;";
+  html += "    })";
+  html += "    .catch(err => console.log('Data error:', err));"; // Bỏ qua nếu dữ liệu lỗi
+  html += "}";
+  html += "setInterval(updateData, 500);"; // 500ms là tốc độ lý tưởng
+  html += "</script></body></html>";
+
+  server.send(200, "text/html", html);
 }
 
+// Hàm chỉ gửi Dữ liệu dạng JSON - Cực nhẹ
+void handleData() {
+  char jsonResponse[128];
+  // Sử dụng snprintf để điền giá trị vào chuỗi JSON một cách an toàn
+  snprintf(jsonResponse, sizeof(jsonResponse), 
+    "{\"dB\":%.1f,\"amp\":%.2f}", 
+    dB, BD_TrungBinh );
+  
+  server.send(200, "application/json", jsonResponse);
+}
+// ===== SETUP =====
 void setup() {
-  Serial.begin(115200);   
-  Serial2.begin(115200);    // Nhận từ STM32 (Chân 16)
+  Serial.begin(115200);
 
-  // Kết nối WiFi
-  WiFi.begin(ssid, password); 
-  while (WiFi.status() != WL_CONNECTED) { 
-    delay(500); 
-    Serial.print(".");    
+  // ⚠️ QUAN TRỌNG: khai báo đúng chân UART2
+  Serial2.begin(115200, SERIAL_8N1, 16, 17);
+
+  WiFi.begin(ssid, password);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
   }
-  
-  // In IP ra Serial Monitor
-  Serial.println("\nWiFi Connected!");
-  Serial.print("Địa chỉ IP để mở Web: ");
-  Serial.println(WiFi.localIP()); 
 
-  server.on("/", handleRoot); 
-  server.begin();             
+  Serial.println("\nWiFi OK");
+  Serial.println(WiFi.localIP());
+
+  server.on("/", handleRoot);
+  server.on("/data", handleData);
+  server.begin();
 }
 
+// ===== LOOP =====
 void loop() {
-  server.handleClient(); // Duy trì web server
+  server.handleClient();
 
-  // Đọc dữ liệu từ STM32 gửi qua UART
-  if (Serial2.available()) {
-    String input = Serial2.readStringUntil('\n');
-    input.trim(); 
-    Serial.println(input);
-    if (input.length() > 0) {
-      Gia_Tri_ADC = input.toInt(); 
-      samples[sampleIdx++] = Gia_Tri_ADC; 
+  // ===== ĐỌC UART BINARY (NHANH - CHÍNH XÁC) =====
+ while (Serial2.available() > 0 && Serial2.peek() != 0xAA) {
+    Serial2.read(); // Vứt bỏ các byte không phải 0xAA
+  }
 
-      // Đủ 100 mẫu thì tính toán
-      if (sampleIdx >= SAMPLE_COUNT) {
-        calculateSound(); 
-        sampleIdx = 0;    
-        
-        // Debug ra màn hình máy tính
-        Serial.print("Amp: "); Serial.print(BD_TrungBinh);
-        Serial.print(" | dB: "); Serial.println(dB);
-      }
+  // 2. Bây giờ, nếu bộ đệm có ít nhất 3 byte và byte đầu ĐÃ LÀ 0xAA
+  if (Serial2.available() >= 3) {
+    uint8_t header = Serial2.read(); // Đọc bỏ byte 0xAA
+    uint8_t high = Serial2.read();
+    uint8_t low  = Serial2.read();
+    
+    int val = (high << 😎 | low;
+
+    // Cập nhật giá trị hiển thị và lưu vào buffer
+    Gia_Tri_ADC = val;
+    samples[sampleIdx++] = val;
+
+    // Debug ra Serial Monitor (có thể tắt đi khi chạy ổn định)
+    // Serial.printf("Read Binary: %d\n", val);
+
+    // 4. Đủ mẫu → Tính toán (Giữ nguyên logic của bạn)
+    if (sampleIdx >= SAMPLE_COUNT) {
+      calculateSound();
+      sampleIdx = 0;
+
+      Serial.print("Amp: ");
+      Serial.print(BD_TrungBinh);
+      Serial.print(" | dB: ");
+      Serial.println(dB);
+      
+      // Lưu ý: Đã dùng Binary thì không nên dùng delay(200) ở đây 
+      // vì có thể làm tràn bộ đệm UART nếu dữ liệu về liên tục.
     }
   }
 }
