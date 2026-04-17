@@ -191,7 +191,7 @@ int main()
             // TIM_Cmd(TIM3, DISABLE); 
 
             // G?i toàn b? 2048 m?u sang ESP32
-            UART1_UART1_SendBuffer_Binary(&Sound_Buffer, BUFFER_SIZE);
+            UART1_SendBuffer_Binary(&Sound_Buffer, BUFFER_SIZE);
 
             // B?t l?i Timer
             // TIM_Cmd(TIM3, ENABLE);
