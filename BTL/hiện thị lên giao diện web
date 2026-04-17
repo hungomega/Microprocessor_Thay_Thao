@@ -1,0 +1,59 @@
+<!doctype html>
+
+<html>
+    <head>
+        <meta charset="UTF-8" />
+        <title>Giám sát âm thanh</title>
+
+        <style>
+            body {
+                font-family: sans-serif;
+                text-align: center;
+                padding-top: 30px;
+                background: #f0f0f0;
+            }
+
+            .box {
+                background: white;
+                display: inline-block;
+                padding: 30px;
+                border-radius: 15px;
+                box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+            }
+
+            .db {
+                font-size: 60px;
+                color: #e74c3c;
+                font-weight: bold;
+            }
+
+            .amp {
+                font-size: 30px;
+                color: #3498db;
+            }
+        </style>
+    </head>
+
+    <body>
+        <div class="box">
+            <h1>Giám Sát Âm Thanh PTIT</h1>
+
+            ```
+            <p>Độ ồn hiện tại:</p>
+            <div class="db">65.2 dB</div>
+
+            <p>Biên độ trung bình:</p>
+            <div class="amp">320.45</div>
+
+            <hr />
+            <p>Giá trị ADC thô: 2100</p>
+            ```
+        </div>
+
+        <script>
+            setInterval(function () {
+                location.reload();
+            }, 800);
+        </script>
+    </body>
+</html>
