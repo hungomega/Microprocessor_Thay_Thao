@@ -3,14 +3,10 @@ Trong thuật toán này sử dụng bảng chữ cái A, B, C, ..., Z.
 Đầu vào là chuỗi mã hóa "M PSZI CSCY" bắt đầu tại địa chỉ 0xFFF0FFF0.
 Xây dựng chương trình ASM thử tất cả các khóa K từ 1 đến 25 và sinh ra các chuỗi giải mã tương ứng.
 
-/* PHẦN KHAI BÁO */
-.global _start      /* Khai báo điểm bắt đầu của chương trình cho trình liên kết (Linker) */
-
-.section .text      /* Định nghĩa phân đoạn mã lệnh (Code) */
-_start:
+start:
     /* 1. KHỞI TẠO CÁC THAM SỐ BAN ĐẦU */
-    LDR R0, =cipher_text  /* R0: Lưu địa chỉ của chuỗi mã hóa (Source) */
-    LDR R1, =0x20000000   /* R1: Lưu địa chỉ bắt đầu của RAM để ghi kết quả (Destination) */
+    LDR R0, =lable        /* R0: Lưu địa chỉ của chuỗi mã hóa*/
+    LDR R1, =0xFFF0FFF0   /* R1: Lưu địa chỉ bắt đầu của RAM để ghi kết quả */
     MOV R2, #1            /* R2: Khóa K khởi tạo bằng 1. Ta sẽ chạy K từ 1 đến 25 */
 
 loop_k:
@@ -30,10 +26,11 @@ loop_char:
     CMP R5, #32           /* Kiểm tra xem có phải dấu cách (ASCII 32) không? */
     BEQ store_char        /* Nếu là dấu cách -> Bỏ qua giải mã, đi thẳng đến bước lưu ký tự */
 
-    /* 4. LOGIC GIẢI MÃ CAESAR: P = (C - K) */
+    /* 4. LOGIC GIẢI MÃ CAESAR: P = (C - K) ( ký tự mới = ký tự cũ - k ) */
     SUB R5, R5, R2        /* Lấy mã ASCII của ký tự trừ đi khóa K hiện tại */
     
     CMP R5, #65           /* So sánh với chữ 'A' (ASCII 65) */
+   
     ADDLT R5, R5, #26     /* Thì cộng thêm 26 để quay vòng lại bảng chữ cái (VD: lùi từ A về Z) */
 
 store_char:
@@ -57,6 +54,6 @@ end_prog:
     B end_prog            /* Vòng lặp vô tận để giữ CPU không chạy vào vùng nhớ lạ */
 
 /* PHẦN DỮ LIỆU ĐẦU VÀO */
-.align 2
-cipher_text:
+
+lable:
     .asciz "M PSZI CSCY"  /* Chuỗi cần giải mã, kết thúc bằng byte 0 */
