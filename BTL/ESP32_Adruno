@@ -1,65 +1,67 @@
 #include <WiFi.h>
 #include <WebServer.h>
 #include <math.h>
-
-// ===== WIFI =====
+#include <arduinoFFT.h>
+// WIFI 
 const char* ssid = "ChungVip 2.4G";
 const char* password = "123456789";
 
 WebServer server(80);
 
-// ===== BUFFER =====
-#define SAMPLE_COUNT 20
+// BUFFER
+#define SAMPLE_COUNT 128
+#define SAMPLING_FREQUENCY 16000
+//
+double vReal[SAMPLE_COUNT];
+double vImag[SAMPLE_COUNT];
 int samples[SAMPLE_COUNT];
 int sampleIdx = 0;
 
-// ===== RESULT =====
+ArduinoFFT<double> FFT = ArduinoFFT<double>(vReal, vImag, SAMPLE_COUNT, SAMPLING_FREQUENCY);
+
+// KẾT QUẢ
 float BD_TrungBinh = 0;
 float dB = 0;
-int Gia_Tri_ADC = 0;
 
-// ===== TÍNH TOÁN =====
+//  TÍNH TOÁN 
 void calculateSound() {
   if (SAMPLE_COUNT == 0) return;
 
   long long Tong_BP = 0;
   double tong_tri_tuyet_doi = 0;
   
-  // 1. Tính trung bình thực tế của mẻ mẫu này để khử nhiễu DC (DC Offset removal)
+  // 1. Tính trung bình thực tế của các mẫu này để khử nhiễu DC 
   long sum_adc = 0;
   for (int i = 0; i < SAMPLE_COUNT; i++) {
     sum_adc += samples[i];
   }
-  float thuc_te_zero = (float)sum_adc / SAMPLE_COUNT;
+  float diemgiua = (float)sum_adc / SAMPLE_COUNT;
 
   // 2. Tính toán Biên độ và RMS
   for (int i = 0; i < SAMPLE_COUNT; i++) {
-    float deviation = (float)samples[i] - thuc_te_zero; // Lấy mẫu trừ đi điểm Zero thực tế
+    float chenhlech = (float)samples[i] - diemgiua; // Lấy mẫu trừ đi diemgiua
     
-    tong_tri_tuyet_doi += abs(deviation);
-    Tong_BP += (long)(deviation * deviation);
+    tong_tri_tuyet_doi += abs(chenhlech);
+    Tong_BP += (long)(chenhlech * chenhlech);
   }
 
-  // Cập nhật Biên độ trung bình (Amplitude)
+  // Cập nhật Biên độ trung bình 
   BD_TrungBinh = (float)tong_tri_tuyet_doi / SAMPLE_COUNT;
 
   // 3. Tính dB (RMS)
   float rms = sqrt((float)Tong_BP / SAMPLE_COUNT);
   
-  if (rms > 0.5) { // Ngưỡng chống nhiễu nhẹ
+  if (rms > 0.5) { 
+    // Ngưỡng chống nhiễu nhẹ
     // Công thức dB: 20*log10(rms). 
-    // Cộng thêm một số (ví dụ +30) để khớp với thực tế nếu cần (Calibration)
-    dB = 20 * log10(rms) + 20; 
+    // Cộng thêm một số để khớp với thực tế 
+    dB = 20 * log10(rms) + 15 ; 
   } else {
     dB = 0;
   }
-  
-  // Cập nhật giá trị ADC cuối cùng để hiển thị web
-  Gia_Tri_ADC = samples[SAMPLE_COUNT - 1]; 
 }
 
-// ===== WEB =====
-// Hàm gửi "Cái khung" Web - Chỉ tải 1 lần duy nhất
+// WEB
 void handleRoot() {
   String html = "<html><head><meta charset='UTF-8' name='viewport' content='width=device-width, initial-scale=1'>";
   html += "<style>";
@@ -74,7 +76,6 @@ void handleRoot() {
   html += "<h2>GIÁM SÁT ÂM THANH</h2>";
   html += "<div id='db_val' class='db'>--</div>";
   html += "<p>Biên độ (Amp): <b id='amp_val' class='amp'>--</b></p>";
- // html += "<hr><p style='color:#888'>Giá trị ADC: <span id='adc_val'>0</span></p>";
   html += "</div>";
 
   html += "<script>";
@@ -84,7 +85,6 @@ void handleRoot() {
   html += "    .then(data => {"; // Nếu nhận được JSON chuẩn thì mới cập nhật
   html += "      document.getElementById('db_val').innerText = data.dB.toFixed(1) + ' dB';";
   html += "      document.getElementById('amp_val').innerText = data.amp.toFixed(2);";
- // html += "      document.getElementById('adc_val').innerText = data.adc;";
   html += "    })";
   html += "    .catch(err => console.log('Data error:', err));"; // Bỏ qua nếu dữ liệu lỗi
   html += "}";
@@ -94,21 +94,18 @@ void handleRoot() {
   server.send(200, "text/html", html);
 }
 
-// Hàm chỉ gửi Dữ liệu dạng JSON - Cực nhẹ
 void handleData() {
   char jsonResponse[128];
-  // Sử dụng snprintf để điền giá trị vào chuỗi JSON một cách an toàn
   snprintf(jsonResponse, sizeof(jsonResponse), 
     "{\"dB\":%.1f,\"amp\":%.2f}", 
     dB, BD_TrungBinh );
   
   server.send(200, "application/json", jsonResponse);
 }
-// ===== SETUP =====
+// SETUP 
 void setup() {
   Serial.begin(115200);
-
-  // ⚠️ QUAN TRỌNG: khai báo đúng chân UART2
+  // khai báo chân UART2 : GPIO16(RX2), GPIO17(TX2)
   Serial2.begin(115200, SERIAL_8N1, 16, 17);
 
   WiFi.begin(ssid, password);
@@ -119,48 +116,61 @@ void setup() {
 
   Serial.println("\nWiFi OK");
   Serial.println(WiFi.localIP());
-
+  delay(2000);
   server.on("/", handleRoot);
   server.on("/data", handleData);
   server.begin();
 }
 
-// ===== LOOP =====
+// Lặp
 void loop() {
   server.handleClient();
 
-  // ===== ĐỌC UART BINARY (NHANH - CHÍNH XÁC) =====
+  // Nhan du lieu Binary từ STM32
  while (Serial2.available() > 0 && Serial2.peek() != 0xAA) {
-    Serial2.read(); // Vứt bỏ các byte không phải 0xAA
+    Serial2.read(); // loại bỏ byte không phải 0xAA
   }
 
-  // 2. Bây giờ, nếu bộ đệm có ít nhất 3 byte và byte đầu ĐÃ LÀ 0xAA
+  // 2. bộ đệm gồm 3 byte và byte đầu là 0xAA
   if (Serial2.available() >= 3) {
     uint8_t header = Serial2.read(); // Đọc bỏ byte 0xAA
-    uint8_t high = Serial2.read();
-    uint8_t low  = Serial2.read();
+    uint8_t high = Serial2.read(); // Đọc byte cao rồi lưu vào high
+    uint8_t low  = Serial2.read(); // Đọc byte thấp rồi lưu vào low
     
-    int val = (high << 😎 | low;
+    int val = (high << 😎 | low; // Dịch trái 8 bit cao sau đó OR với 8 bit thấp
 
-    // Cập nhật giá trị hiển thị và lưu vào buffer
-    Gia_Tri_ADC = val;
-    samples[sampleIdx++] = val;
+    // Cập nhật giá trị hiển thị và lưu vào cac mang can tinh toan 
+    samples[sampleIdx] = val;
+    vReal[sampleIdx] = val;
+    vImag[sampleIdx] = 0;
+    sampleIdx++;
 
-    // Debug ra Serial Monitor (có thể tắt đi khi chạy ổn định)
-    // Serial.printf("Read Binary: %d\n", val);
-
-    // 4. Đủ mẫu → Tính toán (Giữ nguyên logic của bạn)
     if (sampleIdx >= SAMPLE_COUNT) {
       calculateSound();
+      TinhToanFFT();
       sampleIdx = 0;
-
-      Serial.print("Amp: ");
-      Serial.print(BD_TrungBinh);
-      Serial.print(" | dB: ");
-      Serial.println(dB);
+      // Serial.print("Amp: ");
+      // Serial.print(BD_TrungBinh);
+      // Serial.print(" | dB: ");
+      // Serial.println(dB);
       
-      // Lưu ý: Đã dùng Binary thì không nên dùng delay(200) ở đây 
-      // vì có thể làm tràn bộ đệm UART nếu dữ liệu về liên tục.
     }
   }
+}
+  void TinhToanFFT() {
+  // 1. Windowing
+  FFT.windowing(FFT_WIN_TYP_HAMMING, FFT_FORWARD);
+  // 2. Tính FFT
+  FFT.compute(FFT_FORWARD);
+  // 3. Tính biên độ
+  FFT.complexToMagnitude();
+
+  //Serial.println("Kết quả FFT");
+  for (int i = 0; i < (SAMPLE_COUNT / 2); i++) {
+    double frequency = (i * 1.0 * SAMPLING_FREQUENCY) / SAMPLE_COUNT;
+    Serial.print(frequency);
+    Serial.print(" Hz: ");
+    Serial.println(vReal[i]);
+  }
+   delay(6000);
 }
