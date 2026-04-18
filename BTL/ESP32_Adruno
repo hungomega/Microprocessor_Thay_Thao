@@ -88,7 +88,7 @@ void handleRoot() {
   html += "    })";
   html += "    .catch(err => console.log('Data error:', err));"; // Bỏ qua nếu dữ liệu lỗi
   html += "}";
-  html += "setInterval(updateData, 500);"; // 500ms là tốc độ lý tưởng
+  html += "setInterval(updateData, 400);"; // 500ms là tốc độ lý tưởng
   html += "</script></body></html>";
 
   server.send(200, "text/html", html);
@@ -147,12 +147,12 @@ void loop() {
 
     if (sampleIdx >= SAMPLE_COUNT) {
       calculateSound();
-      TinhToanFFT();
+      //TinhToanFFT();
       sampleIdx = 0;
-      // Serial.print("Amp: ");
-      // Serial.print(BD_TrungBinh);
-      // Serial.print(" | dB: ");
-      // Serial.println(dB);
+      Serial.print("Amp: ");
+      Serial.print(BD_TrungBinh);
+      Serial.print(" | dB: ");
+      Serial.println(dB);
       
     }
   }
@@ -168,9 +168,9 @@ void loop() {
   //Serial.println("Kết quả FFT");
   for (int i = 0; i < (SAMPLE_COUNT / 2); i++) {
     double frequency = (i * 1.0 * SAMPLING_FREQUENCY) / SAMPLE_COUNT;
-    Serial.print(frequency);
-    Serial.print(" Hz: ");
-    Serial.println(vReal[i]);
-  }
+  //   Serial.print(frequency);
+  //   Serial.print(" Hz: ");
+  //   Serial.println(vReal[i]);
+   }
    delay(6000);
 }
