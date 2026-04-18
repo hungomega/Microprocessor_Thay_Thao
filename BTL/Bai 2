@@ -3,64 +3,60 @@ Trong thuật toán này sử dụng bảng chữ cái A, B, C, ..., Z.
 Đầu vào là chuỗi mã hóa "M PSZI CSCY" bắt đầu tại địa chỉ 0xFFF0FFF0.
 Xây dựng chương trình ASM thử tất cả các khóa K từ 1 đến 25 và sinh ra các chuỗi giải mã tương ứng.
 
-/* PHẦN KHAI BÁO VECTOR NGẮT (BẮT BUỘC CHO ARM CORTEX-M) */
-    .section RESET, "ax"
-    .align 2
-    .long 0x20001000     /* Thiết lập đỉnh ngăn xếp (Stack Pointer) tại cuối RAM */
-    .long start          /* Khi Reset, CPU sẽ nhảy đến nhãn 'start' để chạy */
+/* PHẦN KHAI BÁO */
+.global _start      /* Khai báo điểm bắt đầu của chương trình cho trình liên kết (Linker) */
 
-    /* PHẦN MÃ NGUỒN CHÍNH */
-    .section .text, "ax"
-    .global start
-    .align 2
-
-start:
-    /* 1. KHỞI TẠO CÁC THÔNG SỐ BAN ĐẦU */
-    LDR R0, =0xFFF0FFF0  /* R0: Địa chỉ vùng nhớ chứa chuỗi gốc cần giải mã (Source) */
-    LDR R1, =0x20000000  /* R1: Địa chỉ vùng nhớ RAM để lưu các chuỗi kết quả (Destination) */
-    MOV R2, #1           /* R2: Khóa K ban đầu (K=1). Ta sẽ thử K từ 1 đến 25 */
+.section .text      /* Định nghĩa phân đoạn mã lệnh (Code) */
+_start:
+    /* 1. KHỞI TẠO CÁC THAM SỐ BAN ĐẦU */
+    LDR R0, =cipher_text  /* R0: Lưu địa chỉ của chuỗi mã hóa (Source) */
+    LDR R1, =0x20000000   /* R1: Lưu địa chỉ bắt đầu của RAM để ghi kết quả (Destination) */
+    MOV R2, #1            /* R2: Khóa K khởi tạo bằng 1. Ta sẽ chạy K từ 1 đến 25 */
 
 loop_k:
-    /* 2. VÒNG LẶP KIỂM TRA KHÓA K */
-    CMP R2, #26          /* So sánh K với 26 */
-    BGE end_prog         /* Nếu K >= 26 (đã thử hết bảng chữ cái) thì dừng chương trình */
+    /* 2. VÒNG LẶP DUYỆT QUA CÁC KHÓA K */
+    CMP R2, #26           /* Kiểm tra xem K đã đạt đến 26 chưa? */
+    BGE end_prog          /* Nếu K >= 26 (đã thử hết bảng chữ cái) -> Dừng chương trình */
     
-    MOV R3, R0           /* Copy địa chỉ gốc vào R3 để dùng làm con trỏ đọc ký tự */
-    MOV R4, R1           /* Copy địa chỉ RAM hiện tại vào R4 để dùng làm con trỏ ghi kết quả */
+    MOV R3, R0            /* Dùng R3 làm con trỏ đọc (Copy địa chỉ chuỗi gốc từ R0) */
+    MOV R4, R1            /* Dùng R4 làm con trỏ ghi (Copy địa chỉ RAM hiện tại từ R1) */
 
 loop_char:
     /* 3. VÒNG LẶP XỬ LÝ TỪNG KÝ TỰ TRONG CHUỖI */
-    LDRB R5, [R3], #1    /* Đọc 1 byte từ [R3] vào R5, sau đó tăng R3 lên 1 (Hậu tự tăng) */
-    CMP R5, #0           /* So sánh ký tự vừa đọc với 0 (Ký tự NULL kết thúc chuỗi) */
-    BEQ end_string       /* Nếu gặp NULL thì kết thúc chuỗi hiện tại, chuyển sang K tiếp theo */
+    LDRB R5, [R3], #1     /* Đọc 1 byte từ [R3] vào R5, sau đó tăng R3 lên 1 (Hậu tự tăng) */
+    CMP R5, #0            /* Kiểm tra ký tự NULL (kết thúc chuỗi) */
+    BEQ end_string        /* Nếu thấy byte 0 -> Kết thúc chuỗi hiện tại, chuyển sang khóa K tiếp theo */
     
-    CMP R5, #32          /* So sánh với mã ASCII 32 (Khoảng trắng) */
-    BEQ store_char       /* Nếu là khoảng trắng thì không giải mã, giữ nguyên và đi lưu luôn */
+    CMP R5, #32           /* Kiểm tra xem có phải dấu cách (ASCII 32) không? */
+    BEQ store_char        /* Nếu là dấu cách -> Bỏ qua giải mã, đi thẳng đến bước lưu ký tự */
 
-    /* 4. LOGIC GIẢI MÃ CAESAR */
-    SUB R5, R5, R2       /* Công thức giải mã: Ký tự mới = Ký tự cũ - K */
+    /* 4. LOGIC GIẢI MÃ CAESAR: P = (C - K) */
+    SUB R5, R5, R2        /* Lấy mã ASCII của ký tự trừ đi khóa K hiện tại */
     
-    CMP R5, #65          /* So sánh với 'A' (ASCII 65) */
-    IT LT                /* Cấu trúc If-Then: Nếu ký tự < 65 (Bị tràn khỏi bảng chữ cái) */
-    ADDLT R5, R5, #26    /* Thì cộng thêm 26 để quay vòng lại (ví dụ 'A' lùi 1 thành 'Z') */
+    CMP R5, #65           /* So sánh với chữ 'A' (ASCII 65) */
+    ADDLT R5, R5, #26     /* Thì cộng thêm 26 để quay vòng lại bảng chữ cái (VD: lùi từ A về Z) */
 
 store_char:
-    STRB R5, [R4], #1    /* Lưu ký tự đã xử lý vào RAM [R4], sau đó tăng R4 lên 1 */
-    B loop_char          /* Quay lại đọc ký tự tiếp theo của chuỗi */
+    /* 5. LƯU KÝ TỰ ĐÃ GIẢI MÃ VÀO RAM */
+    STRB R5, [R4], #1     /* Lưu byte từ R5 vào địa chỉ [R4], sau đó tăng R4 lên 1 */
+    B loop_char           /* Quay lại để xử lý ký tự tiếp theo trong chuỗi */
 
 end_string:
-    /* 5. KẾT THÚC MỘT TRƯỜNG HỢP CỦA K */
-    MOV R5, #10          /* Nạp mã ASCII 10 (Xuống dòng - Line Feed) */
-    STRB R5, [R4], #1    /* Lưu dấu xuống dòng vào RAM để các chuỗi kết quả dễ nhìn hơn */
+    /* 6. KẾT THÚC MỘT TRƯỜNG HỢP GIẢI MÃ (VỚI 1 KHÓA K) */
+    MOV R5, #10           /* Nạp mã ASCII 10 (Xuống dòng - \n) */
+    STRB R5, [R4], #1     /* Lưu dấu xuống dòng vào RAM để dễ đọc kết quả */
+    MOV R5, #0            /* Nạp byte 0 (NULL) */
+    STRB R5, [R4], #1     /* Đánh dấu kết thúc chuỗi giải mã của khóa K hiện tại */
     
-    MOV R5, #0           /* Nạp mã NULL (0) */
-    STRB R5, [R4], #1    /* Đánh dấu kết thúc chuỗi kết quả trong RAM */
-    
-    MOV R1, R4           /* Cập nhật R1 bằng địa chỉ R4 hiện tại để chuỗi K tiếp theo nối đuôi vào sau */
-    ADD R2, R2, #1       /* Tăng khóa K (K = K + 1) */
-    B loop_k             /* Quay lại vòng lặp K để thử trường hợp giải mã mới */
+    MOV R1, R4            /* Cập nhật R1 tới vị trí trống tiếp theo để chuỗi sau ghi nối đuôi vào */
+    ADD R2, R2, #1        /* Tăng khóa K lên 1 (K = K + 1) */
+    B loop_k              /* Quay lại vòng lặp K để thử trường hợp giải mã mới */
 
 end_prog:
-    /* 6. KẾT THÚC TOÀN BỘ CHƯƠNG TRÌNH */
-    B end_prog           /* Vòng lặp vô tận để CPU không chạy vào vùng nhớ lạ */
-    .end
+    /* 7. KẾT THÚC TOÀN BỘ CHƯƠNG TRÌNH */
+    B end_prog            /* Vòng lặp vô tận để giữ CPU không chạy vào vùng nhớ lạ */
+
+/* PHẦN DỮ LIỆU ĐẦU VÀO */
+.align 2
+cipher_text:
+    .asciz "M PSZI CSCY"  /* Chuỗi cần giải mã, kết thúc bằng byte 0 */
